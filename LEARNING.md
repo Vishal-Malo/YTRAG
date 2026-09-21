@@ -93,15 +93,39 @@ Prompt engineering is not limited to creating a system prompt from a user prompt
 
 ## What are embeddings?
 
-TODO
+An embedding is a numerical representation of a piece of text that captures useful semantic information about that text.
+
+The text can be a sentence, paragraph, transcript chunk, document, or user query.
+
+An embedding can be represented as a vector of numbers. This vector can be considered as a position in a high-dimensional vector space.
 
 ## Why are embeddings needed?
 
-TODO
+Keyword-based search may fail to identify relevant information when the words used in the user's query are different from the words used in the transcript.
+
+For example:
+
+> User: "How does Python connect to a database?"
+
+> Transcript: "The application establishes a connection with PostgreSQL using a database driver."
+
+The exact words in the user query and transcript are different, but their meaning is related.
+
+Embeddings allow YTRAG to represent both the user query and transcript chunks as vectors that capture semantic information. This allows us to identify transcript chunks that are semantically relevant to the user's question even when the exact keywords are different.
 
 ## Semantic Similarity
 
-TODO
+Two pieces of text are semantically similar when their embeddings are close to each other according to a chosen similarity or distance measure.
+
+For example, the following sentences have similar meanings:
+
+> "Python is used to build APIs."
+
+> "Python is commonly used for developing web services."
+
+Their embeddings would ideally be close to each other in the vector space.
+
+For YTRAG, the embedding of the user's query can be compared with the embeddings of transcript chunks to identify the chunks that are most relevant to the user's question.
 
 ---
 
