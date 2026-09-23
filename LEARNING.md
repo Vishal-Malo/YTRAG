@@ -133,15 +133,144 @@ For YTRAG, the embedding of the user's query can be compared with the embeddings
 
 ## What is a vector database?
 
-TODO
+A vector database is a system designed to store and efficiently search vector representations, such as embeddings.
+
+In YTRAG, transcript chunks will be converted into embeddings and stored in a vector database.
+
+A stored record can conceptually contain:
+
+```text
+Vector   → [0.12, -0.83, 0.41, ...]
+Text     → "PostgreSQL provides..."
+Metadata → video_id, timestamp, chunk_id
+```
+
+The vector database is not only used to store embeddings. Its important purpose is to efficiently search for vectors that are similar to a given query vector.
+
+## Why do we need a vector database?
+
+A YouTube video can contain many transcript chunks, and each chunk can have its own embedding.
+
+For example:
+
+```text
+1 Video
+   ↓
+1000 Chunks
+   ↓
+1000 Embeddings
+```
+
+If YTRAG contains many videos, the number of embeddings can become very large.
+
+A simple Python list can store vectors, but it does not provide specialized capabilities for efficiently searching a large collection of vectors.
+
+A vector database provides capabilities such as:
+
+- Efficient vector storage
+- Similarity search
+- Vector indexing
+- Retrieval of relevant chunks
+- Storage of metadata associated with vectors
+
+The main purpose is therefore:
+
+**Store vectors and efficiently search them based on similarity.**
 
 ## Similarity Search
 
-TODO
+Similarity search is the process of finding vectors that are most semantically similar to a given query vector.
+
+In YTRAG, the process is:
+
+```text
+User Question
+      ↓
+Query Embedding
+      ↓
+Compare with stored embeddings
+      ↓
+Calculate similarity/distance
+      ↓
+Find relevant chunks
+```
+
+For example:
+
+```text
+Query → "How does Python connect to PostgreSQL?"
+
+Chunk A → Similarity: 0.21
+Chunk B → Similarity: 0.87
+Chunk C → Similarity: 0.34
+Chunk D → Similarity: 0.92
+Chunk E → Similarity: 0.76
+```
+
+The chunks with the highest similarity scores would generally be considered more relevant to the query.
+
+The exact interpretation depends on the similarity or distance method being used. Some methods represent higher values as more similar, while distance-based methods may represent smaller values as more similar.
 
 ## Top-K Retrieval
 
-TODO
+Top-K retrieval means selecting the K most relevant chunks from the results of a similarity search.
+
+For example, if YTRAG searches through 10,000 transcript chunks and K is 5, it retrieves the 5 most relevant chunks for the user's question.
+
+```text
+10,000 Chunks
+      ↓
+Similarity Search
+      ↓
+Top 5 Relevant Chunks
+      ↓
+LLM Context
+```
+
+We retrieve multiple chunks because the answer may not always be contained within a single chunk.
+
+For example:
+
+```text
+Chunk 101 → Introduces the concept
+Chunk 102 → Explains the concept
+Chunk 103 → Gives an example
+Chunk 104 → Explains a limitation
+```
+
+The user's question might require information from multiple chunks to generate a complete answer.
+
+## Vector Database in YTRAG
+
+The vector database will be used after the transcript has been split into chunks and converted into embeddings.
+
+The general process is:
+
+```text
+YouTube Video
+      ↓
+Transcript
+      ↓
+Chunks
+      ↓
+Embeddings
+      ↓
+Vector Database
+```
+
+When the user asks a question, the question follows a separate path:
+
+```text
+User Question
+      ↓
+Query Embedding
+      ↓
+Similarity Search
+      ↓
+Top-K Relevant Chunks
+```
+
+The retrieved chunks are then provided to the LLM as context.
 
 ---
 
@@ -240,7 +369,7 @@ It changes the variability of token selection during generation, which can resul
 
 The basic flow understood so far is:
 
-```
+```text
        User Question
             ↓
         Retrieval
@@ -257,3 +386,45 @@ Relevant Transcript Chunks
 The key distinction to remember:
 
 **RAG retrieves. LLM generates.**
+
+---
+
+# Day 4 Mental Model
+
+The retrieval process learned on Day 4 can be represented as:
+
+```text
+YouTube Transcript
+       ↓
+     Chunks
+       ↓
+   Embeddings
+       ↓
+      Vectors
+       ↓
+Vector Database
+       ↓
+   Query Vector
+       ↓
+Similarity Search
+       ↓
+  Top-K Chunks
+       ↓
+     Context
+       ↓
+      LLM
+       ↓
+    Answer
+```
+
+The key distinctions to remember:
+
+**Embedding:** Text → Vector
+
+**Vector Database:** Stores and efficiently searches vectors
+
+**Similarity Search:** Finds vectors relevant to a query vector
+
+**Top-K Retrieval:** Selects the K most relevant chunks
+
+**LLM:** Generates the final answer using the retrieved context
