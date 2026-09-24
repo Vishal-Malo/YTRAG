@@ -278,19 +278,230 @@ The retrieved chunks are then provided to the LLM as context.
 
 ## What is RAG?
 
-TODO
+RAG stands for **Retrieval-Augmented Generation**.
+
+RAG is an architecture where relevant information is first retrieved from an external source and then provided to an LLM as context along with the user's query. The LLM uses this context to generate the final response.
+
+The basic idea is:
+
+```text
+User Question
+      ↓
+Retrieval
+      ↓
+Relevant External Information
+      ↓
+Context + User Question
+      ↓
+LLM
+      ↓
+Generated Answer
+```
+
+For YTRAG, the external information will primarily come from YouTube transcripts.
+
+RAG does not permanently teach the LLM the retrieved information. The retrieved information is provided as context for the current request; the model's internal parameters are not changed.
 
 ## Why is RAG needed?
 
-TODO
+An LLM has knowledge learned during its training, but it does not automatically have access to every private, external, or newly provided document.
+
+For YTRAG, the information contained in a particular YouTube video needs to be made available to the LLM when the user asks questions about that video.
+
+RAG allows YTRAG to retrieve relevant information from the video's transcript and provide that information to the LLM as context.
+
+This allows the answer to be based on the specific external information rather than relying only on the model's previously learned knowledge.
+
+RAG is especially useful when:
+
+- The information is external to the model.
+- The information may change over time.
+- The information belongs to a specific document or video.
+- We want answers grounded in a particular knowledge source.
 
 ## RAG Pipeline
 
-TODO
+A RAG system can be understood as two related pipelines:
+
+### 1. Indexing Pipeline
+
+The indexing pipeline prepares external information so that it can later be searched.
+
+For YTRAG:
+
+```text
+YouTube Video
+      ↓
+Transcript
+      ↓
+Chunks
+      ↓
+Embeddings
+      ↓
+Vector Database
+```
+
+The transcript is processed and converted into searchable vector representations.
+
+This generally happens when the video is added or indexed, rather than every time the user asks a question.
+
+### 2. Query Pipeline
+
+The query pipeline handles an individual user question.
+
+```text
+User Question
+      ↓
+Query Embedding
+      ↓
+Similarity Search
+      ↓
+Top-K Relevant Chunks
+      ↓
+Context Construction
+      ↓
+LLM
+      ↓
+Answer
+```
+
+The query pipeline uses the embeddings already stored during indexing.
+
+The complete YTRAG RAG flow can therefore be represented as:
+
+```text
+                    INDEXING
+                       │
+YouTube Video          │
+      ↓                │
+Transcript             │
+      ↓                │
+    Chunks              │
+      ↓                │
+  Embeddings            │
+      ↓                │
+Vector Database         │
+                       │
+═══════════════════════╪════════════════════
+                       │
+                     QUERY
+                       ↓
+                 User Question
+                       ↓
+                Query Embedding
+                       ↓
+               Similarity Search
+                       ↓
+              Top-K Relevant Chunks
+                       ↓
+                Context Construction
+                       ↓
+                       LLM
+                       ↓
+                     Answer
+```
 
 ## Retrieval vs Generation
 
-TODO
+**Retrieval** is the process of finding relevant information from the external knowledge source.
+
+In YTRAG, retrieval involves:
+
+```text
+User Question
+      ↓
+Query Embedding
+      ↓
+Similarity Search
+      ↓
+Top-K Relevant Chunks
+```
+
+The retrieved chunks are then used to construct the context provided to the LLM.
+
+**Generation** is the process where the LLM uses the user question and the retrieved context to generate the final response.
+
+```text
+User Question
+      +
+Retrieved Context
+      ↓
+     LLM
+      ↓
+Generated Answer
+```
+
+The key distinction is:
+
+**RAG retrieves relevant information. The LLM generates the answer.**
+
+## Grounded Generation
+
+Grounded generation means generating an answer that is supported by the information provided as context.
+
+For YTRAG, the retrieved transcript chunks should act as the primary evidence for answering questions about the video.
+
+For example, if the retrieved transcript says:
+
+> "The application uses PostgreSQL because the data has a relational structure."
+
+A grounded answer could explain that PostgreSQL was chosen because of the relational nature of the data.
+
+However, RAG does not guarantee that every generated answer will be correct.
+
+A RAG system can still fail if:
+
+- The wrong chunks are retrieved.
+- Important information is missing from the retrieved context.
+- Too much irrelevant information is included.
+- The LLM incorrectly interprets the retrieved information.
+- The LLM generates information that is not supported by the context.
+
+This means that both **retrieval quality** and **generation quality** are important.
+
+## RAG vs Fine-Tuning
+
+### RAG
+
+RAG retrieves external information and provides it to the LLM as context during inference.
+
+```text
+External Information
+       ↓
+   Retrieval
+       ↓
+    Context
+       ↓
+      LLM
+       ↓
+    Answer
+```
+
+The model's internal parameters are not changed.
+
+### Fine-Tuning
+
+Fine-tuning involves additional training that changes the model's parameters so that the model can behave differently based on the training examples provided.
+
+Conceptually:
+
+```text
+Base LLM
+   ↓
+Additional Training Data
+   ↓
+Fine-Tuned LLM
+```
+
+Therefore:
+
+```text
+RAG
+→ Provides external information as context
+
+Fine-Tuning
+→ Changes model parameters through additional training
+```
 
 ---
 
@@ -428,3 +639,125 @@ The key distinctions to remember:
 **Top-K Retrieval:** Selects the K most relevant chunks
 
 **LLM:** Generates the final answer using the retrieved context
+
+---
+
+# Day 5 Mental Model
+
+RAG connects the concepts learned during the previous days into a complete architecture.
+
+```text
+                    INDEXING
+                       │
+YouTube Video          │
+      ↓                │
+Transcript             │
+      ↓                │
+    Chunks              │
+      ↓                │
+  Embeddings            │
+      ↓                │
+Vector Database         │
+                       │
+═══════════════════════╪════════════════════
+                       │
+                     QUERY
+                       ↓
+                 User Question
+                       ↓
+                Query Embedding
+                       ↓
+               Similarity Search
+                       ↓
+              Top-K Relevant Chunks
+                       ↓
+                Context Construction
+                       ↓
+                       LLM
+                       ↓
+                     Answer
+```
+
+## Key Distinctions
+
+**Indexing**
+
+```text
+Prepare external information for retrieval.
+```
+
+**Query Pipeline**
+
+```text
+Use a user question to retrieve relevant information.
+```
+
+**Retrieval**
+
+```text
+Find relevant information.
+```
+
+**Augmentation**
+
+```text
+Add retrieved information to the context given to the LLM.
+```
+
+**Generation**
+
+```text
+LLM + User Question + Retrieved Context → Answer
+```
+
+**Grounded Generation**
+
+```text
+Generate an answer supported by the retrieved context.
+```
+
+**RAG**
+
+```text
+Retrieval + Augmentation + Generation
+```
+
+## Important Failure Modes
+
+A RAG system can fail at different stages.
+
+### Retrieval Failure
+
+```text
+Question
+   ↓
+Retrieval
+   ↓
+Wrong / irrelevant chunks
+```
+
+The correct information may exist in the vector database but still not be retrieved.
+
+Possible causes can include problems with chunking, embeddings, query representation, similarity configuration, or retrieval parameters.
+
+### Context Failure
+
+```text
+Correct information exists
+        ↓
+Poorly constructed context
+        ↓
+LLM receives incomplete or irrelevant information
+```
+
+### Generation Failure
+
+```text
+Correct context
+      ↓
+     LLM
+      ↓
+Unsupported or incorrect answer
+```
+
+This distinction will become important later when studying advanced RAG techniques and RAG evaluation.

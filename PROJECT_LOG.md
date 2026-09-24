@@ -212,7 +212,7 @@ Similarity Search
        ↓
   Top-K Chunks
        ↓
-     Context
+    Context
        ↓
       LLM
        ↓
@@ -230,7 +230,7 @@ Text → Vector
 **Vector Database**
 
 ```text
-Stores + efficiently searches vectors
+Stores and efficiently searches vectors
 ```
 
 **Similarity Search**
@@ -265,19 +265,176 @@ Potential technologies such as Chroma, FAISS, Pinecone, Qdrant, or pgvector will
 
 # Day 5 — RAG Fundamentals
 
-## Planned Topics
+## Topics Learned
 
 - What is RAG?
 - Why RAG is needed
 - Retrieval vs generation
 - RAG pipeline
+- Indexing pipeline vs query pipeline
 - Context construction
 - Grounded generation
 - Basic RAG architecture
+- RAG failure points
+- RAG vs fine-tuning
+
+## Key Learnings
+
+RAG stands for **Retrieval-Augmented Generation**.
+
+RAG retrieves relevant information from an external source and provides that information as context to an LLM so that the LLM can generate a response using the retrieved information.
+
+For YTRAG, the external knowledge source is primarily the YouTube transcript.
+
+## Indexing vs Query Pipeline
+
+A major distinction learned on Day 5 is that a RAG system can be viewed as two pipelines.
+
+### Indexing Pipeline
+
+The indexing pipeline prepares information for later retrieval:
+
+```text
+YouTube Video
+      ↓
+  Transcript
+      ↓
+    Chunks
+      ↓
+  Embeddings
+      ↓
+ Vector Store
+```
+
+The transcript embeddings are normally created when the video is indexed, not again for every question.
+
+### Query Pipeline
+
+The query pipeline handles a user's question:
+
+```text
+User Question
+      ↓
+Query Embedding
+      ↓
+Similarity Search
+      ↓
+Top-K Relevant Chunks
+      ↓
+    Context
+      ↓
+Prompt + Context
+      ↓
+      LLM
+      ↓
+    Answer
+```
+
+This distinction will be important when implementation begins because indexing and querying have different responsibilities and execution patterns.
+
+## Context Construction
+
+The vector search operates on embeddings, but the LLM needs the actual retrieved transcript text.
+
+Therefore, a useful stored record conceptually contains:
+
+```text
+Vector
++
+Chunk Text
++
+Metadata
+```
+
+The retrieved chunk text is used to construct the context provided to the LLM along with the user's question.
+
+## Grounded Generation
+
+Grounded generation means that the generated response should be supported by the retrieved context.
+
+For YTRAG, the retrieved transcript chunks should act as the primary evidence for questions about the video.
+
+RAG does not guarantee zero hallucinations. A system can still fail when retrieval returns the wrong chunks, context is poorly constructed, or the LLM produces an unsupported interpretation.
+
+## RAG vs Fine-Tuning
+
+**RAG** uses external information at query time by retrieving relevant content and providing it as context.
+
+**Fine-tuning** uses additional training data to change model parameters so that the model behaves or responds in a more suitable way for a specific requirement.
+
+For YTRAG, RAG allows new or different videos to be indexed without retraining the underlying LLM for every new video.
+
+## Important Distinction
+
+The key distinction remains:
+
+**RAG retrieves. The LLM generates.**
+
+More precisely:
+
+```text
+Retrieval → Finds relevant information
+Augmentation → Adds retrieved information to the model input/context
+Generation → LLM produces the response
+```
+
+## RAG Failure Points
+
+A basic RAG system can fail at multiple stages:
+
+```text
+Question
+   ↓
+Retrieval
+   ↓
+Context
+   ↓
+Generation
+   ↓
+Answer
+```
+
+If the correct chunk exists in the vector store but unrelated chunks are returned, the observed failure is a **retrieval failure**. The underlying cause could be related to chunking, embeddings, query representation, similarity settings, Top-K, or other retrieval choices.
+
+If useful context is retrieved but the LLM produces an incorrect or unsupported response, the failure is in generation or in how the context was used.
+
+These failure modes provide the motivation for the later production RAG, advanced RAG, and evaluation topics in the roadmap.
+
+## Day 5 Mental Model
+
+```text
+             INDEXING
+                ↓
+        YouTube Transcript
+                ↓
+              Chunks
+                ↓
+            Embeddings
+                ↓
+           Vector Store
+                │
+════════════════╪══════════════════
+                │
+              QUERY
+                ↓
+          User Question
+                ↓
+        Query Embedding
+                ↓
+        Similarity Search
+                ↓
+      Top-K Relevant Chunks
+                ↓
+             Context
+                ↓
+               LLM
+                ↓
+             Answer
+```
 
 ## Status
 
-**Next**
+**Completed**
 
 ---
 
@@ -478,15 +635,15 @@ The development approach is:
 
 ```text
 Understand
-    ↓
+   ↓
 Explain
-    ↓
+   ↓
 Experiment
-    ↓
+   ↓
 Implement
-    ↓
+   ↓
 Evaluate
-    ↓
+   ↓
 Improve
 ```
 
@@ -496,10 +653,10 @@ Complexity should be introduced only when there is a clear problem that requires
 
 # Current Status
 
-**Current Day:** Day 4
+**Current Day:** Day 5
 
-**Current Phase:** AI & RAG Fundamentals
+**Current Phase:** AI & RAG Fundamentals → Basic RAG Prototype
 
-**Completed:** Days 1–4
+**Completed:** Days 1–5
 
-**Next:** Day 5 — RAG Fundamentals
+**Next:** Day 6 — Basic RAG Architecture + Retrieval → Context → Generation
