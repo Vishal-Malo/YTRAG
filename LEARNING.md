@@ -211,16 +211,44 @@ The chunks with the highest similarity scores would generally be considered more
 
 The exact interpretation depends on the similarity or distance method being used. Some methods represent higher values as more similar, while distance-based methods may represent smaller values as more similar.
 
+## Similarity Score vs Relevance
+
+A similarity score tells us how similar two vectors are according to the selected similarity or distance method.
+
+It is an important signal used by retrieval systems to estimate relevance, but it does not guarantee:
+
+- That the chunk is actually relevant.
+- That the retrieved information is correct.
+- That the chunk contains all the information required to answer the question.
+
+Therefore:
+
+```text
+Similarity Score
+      ↓
+Signal for Relevance
+      ≠
+Guaranteed Relevance
+      ≠
+Truth
+```
+
+A high similarity score means that the query and chunk are close according to the embedding representation and similarity method.
+
+It does not mean that the chunk is factually correct or that it completely answers the question.
+
 ## Top-K Retrieval
 
 Top-K retrieval means selecting the K most relevant chunks from the results of a similarity search.
 
-For example, if YTRAG searches through 10,000 transcript chunks and K is 5, it retrieves the 5 most relevant chunks for the user's question.
+For example, if YTRAG searches through 10,000 transcript chunks and K is 5, it retrieves the 5 highest-ranked chunks for the user's question.
 
 ```text
 10,000 Chunks
       ↓
 Similarity Search
+      ↓
+Ranking
       ↓
 Top 5 Relevant Chunks
       ↓
@@ -240,37 +268,223 @@ Chunk 104 → Explains a limitation
 
 The user's question might require information from multiple chunks to generate a complete answer.
 
-## Vector Database in YTRAG
+## Top-K Trade-off
 
-The vector database will be used after the transcript has been split into chunks and converted into embeddings.
+Choosing K involves a trade-off.
 
-The general process is:
+A small K can reduce irrelevant information but may miss useful information.
+
+A large K can retrieve more potentially useful information but may also introduce irrelevant information and increase context size.
+
+Conceptually:
 
 ```text
-YouTube Video
-      ↓
-Transcript
-      ↓
-Chunks
-      ↓
-Embeddings
-      ↓
-Vector Database
+Small K
+   ↓
+Less context
+Less noise
+Potentially lower recall
+
+
+Large K
+   ↓
+More context
+More noise
+Potentially higher recall
+Higher token usage
 ```
 
-When the user asks a question, the question follows a separate path:
+Therefore, there is no universally correct value of K.
+
+YTRAG will eventually need to experiment with different retrieval settings.
+
+## Similarity Threshold
+
+A similarity threshold defines a minimum similarity level that a retrieved result must meet.
+
+For example:
 
 ```text
-User Question
-      ↓
-Query Embedding
-      ↓
+A → 0.95
+B → 0.91
+C → 0.88
+D → 0.70
+E → 0.42
+```
+
+If the threshold is:
+
+```text
+0.80
+```
+
+then:
+
+```text
+A → 0.95 ✓
+B → 0.91 ✓
+C → 0.88 ✓
+D → 0.70 ✗
+E → 0.42 ✗
+```
+
+The threshold prevents clearly low-scoring results from being included simply because the system needs to return K results.
+
+However, similarity thresholds are not universal constants.
+
+The appropriate value can depend on:
+
+- Embedding model
+- Dataset
+- Similarity method
+- Chunking strategy
+- Query type
+
+Therefore, thresholds should eventually be evaluated experimentally.
+
+## Top-K vs Similarity Threshold
+
+These solve related but different problems.
+
+### Top-K
+
+```text
+"Give me the K highest-ranked results."
+```
+
+For example:
+
+```text
+K = 3
+```
+
+returns the three highest-ranked results.
+
+### Similarity Threshold
+
+```text
+"Only return results above this minimum similarity."
+```
+
+For example:
+
+```text
+threshold = 0.80
+```
+
+returns only results meeting that threshold.
+
+They can also be combined:
+
+```text
+Query
+  ↓
 Similarity Search
-      ↓
-Top-K Relevant Chunks
+  ↓
+Candidate Results
+  ↓
+Similarity Threshold
+  ↓
+Top-K Limit
+  ↓
+Final Retrieved Chunks
 ```
 
-The retrieved chunks are then provided to the LLM as context.
+The exact retrieval strategy will be tested later in YTRAG.
+
+## Precision and Recall
+
+Precision and recall help us reason about retrieval quality.
+
+### Precision
+
+Precision asks:
+
+> Of everything that was retrieved, how much was actually relevant?
+
+Conceptually:
+
+```text
+Precision =
+Relevant Retrieved Information
+------------------------------
+All Retrieved Information
+```
+
+High precision means the retrieved results contain relatively little irrelevant information.
+
+### Recall
+
+Recall asks:
+
+> Of all the relevant information that exists, how much did we successfully retrieve?
+
+Conceptually:
+
+```text
+Recall =
+Relevant Retrieved Information
+------------------------------
+All Relevant Information
+```
+
+High recall means the retriever is less likely to miss relevant information.
+
+## Why Precision and Recall Matter for YTRAG
+
+Suppose a video's answer is distributed across three chunks:
+
+```text
+Chunk A → Relevant
+Chunk B → Relevant
+Chunk C → Relevant
+```
+
+If the retriever returns:
+
+```text
+Chunk A
+Chunk X
+Chunk Y
+```
+
+then it has retrieved some relevant information, but it has also introduced irrelevant information and missed important context.
+
+This can be viewed as:
+
+```text
+Precision problem
++
+Recall problem
+```
+
+Retrieval evaluation will become important later when we start measuring YTRAG rather than simply assuming that the retriever works.
+
+## Retrieval Failure
+
+A retrieval failure occurs when relevant information exists in the knowledge source but the retrieval system fails to return the appropriate chunk(s).
+
+For example:
+
+```text
+Correct Chunk Exists
+       ↓
+Similarity Search
+       ↓
+Wrong / Irrelevant Chunks
+```
+
+Possible causes include:
+
+- Poor chunking
+- Poor embedding representation
+- Query representation
+- Similarity method or configuration
+- Top-K configuration
+- Similarity threshold
+- Other retrieval parameters
+
+Top-K itself is not necessarily "broken" when retrieval fails. The problem may occur earlier in the retrieval process.
 
 ---
 
@@ -457,51 +671,7 @@ A RAG system can still fail if:
 - The LLM incorrectly interprets the retrieved information.
 - The LLM generates information that is not supported by the context.
 
-This means that both **retrieval quality** and **generation quality** are important.
-
-## RAG vs Fine-Tuning
-
-### RAG
-
-RAG retrieves external information and provides it to the LLM as context during inference.
-
-```text
-External Information
-       ↓
-   Retrieval
-       ↓
-    Context
-       ↓
-      LLM
-       ↓
-    Answer
-```
-
-The model's internal parameters are not changed.
-
-### Fine-Tuning
-
-Fine-tuning involves additional training that changes the model's parameters so that the model can behave differently based on the training examples provided.
-
-Conceptually:
-
-```text
-Base LLM
-   ↓
-Additional Training Data
-   ↓
-Fine-Tuned LLM
-```
-
-Therefore:
-
-```text
-RAG
-→ Provides external information as context
-
-Fine-Tuning
-→ Changes model parameters through additional training
-```
+A system prompt can instruct the LLM to answer using the retrieved context, but this is a mitigation rather than a guarantee.
 
 ---
 
@@ -764,104 +934,321 @@ This distinction will become important later when studying advanced RAG techniqu
 
 ---
 
-# Day 6 Mental Model
+# Day 7 — Retrieval Engineering
 
-Day 6 focused on understanding how the individual RAG components work together to form a basic end-to-end RAG system.
+## Topics Learned
 
-## Indexing Pipeline
+- Query embeddings
+- Similarity search
+- Similarity scores
+- Top-K retrieval
+- Top-K trade-offs
+- Similarity thresholds
+- Top-K vs similarity thresholds
+- Precision
+- Recall
+- Retrieval failure
+- Similarity score vs guaranteed relevance
+- Retrieval vs generation
 
-The indexing pipeline prepares external information for retrieval.
+## Query Embedding
 
-```text
-External Document
-      ↓
-    Chunks
-      ↓
-   Embeddings
-      ↓
-Vector + Text + Metadata
-      ↓
-Vector Store
-```
+During retrieval, the user's question is converted into an embedding.
 
-For YTRAG:
-
-```text
-YouTube Video
-      ↓
-Transcript
-      ↓
-Chunks
-      ↓
-Embeddings
-      ↓
-Vector Store
-```
-
-The vector store contains the information required to retrieve useful chunks, conceptually:
-
-```text
-Vector
-+
-Chunk Text
-+
-Metadata
-```
-
-## Query Pipeline
-
-The query pipeline retrieves relevant information for an individual user question.
+The query embedding allows the system to compare the user's question against the embeddings of stored transcript chunks.
 
 ```text
 User Question
       ↓
-Query Embedding
+Embedding Model
+      ↓
+Query Vector
       ↓
 Similarity Search
       ↓
-Top-K Relevant Chunks
-      ↓
-Context Construction
-      ↓
-LLM
-      ↓
-Answer
+Stored Chunk Vectors
 ```
 
-The query and stored chunk embeddings are represented in the same vector space so that their semantic relationship can be measured.
+The query and stored chunk embeddings need to exist in a compatible vector space so that their semantic relationship can be measured.
 
-## Vector vs Retrieved Text
+## Similarity Search
 
-A vector is a numerical representation of text used for semantic retrieval.
+Similarity search compares the query vector against stored chunk vectors and ranks them according to a similarity or distance measure.
 
-Retrieved text is the actual textual information from the original document that can be provided to the LLM.
-
-The key distinction is:
+Conceptually:
 
 ```text
-Vector → FIND
-Text   → INFORM
+Query Vector
+      ↓
+Compare with stored vectors
+      ↓
+Similarity / Distance
+      ↓
+Ranking
+      ↓
+Candidate Chunks
 ```
 
-The vector is useful for determining which information is relevant, while the actual text is needed by the LLM as evidence for generating the response.
-
-## Retrieval vs Context Construction
-
-**Retrieval** answers:
+For example:
 
 ```text
-Which information should I use?
+Chunk A → 0.95
+Chunk B → 0.91
+Chunk C → 0.88
+Chunk D → 0.70
+Chunk E → 0.42
 ```
 
-It finds relevant chunks according to the user query.
-
-**Context Construction** answers:
+Assuming higher scores indicate greater similarity, the ranking is:
 
 ```text
-How should I present the retrieved information to the LLM?
+A > B > C > D > E
 ```
 
-It combines information such as:
+## Similarity Score Does Not Guarantee Relevance
+
+A similarity score is a signal used to estimate relevance.
+
+It does not guarantee that:
+
+```text
+High similarity
+    =
+Correct information
+```
+
+or:
+
+```text
+High similarity
+    =
+Complete answer
+```
+
+Therefore:
+
+```text
+Similarity
+    ↓
+Retrieval Signal
+    ≠
+Truth
+```
+
+## Top-K Retrieval
+
+Top-K determines how many of the highest-ranked results are selected.
+
+For:
+
+```text
+K = 3
+```
+
+and:
+
+```text
+A → 0.95
+B → 0.91
+C → 0.88
+D → 0.70
+E → 0.42
+```
+
+the retrieved chunks are:
+
+```text
+A
+B
+C
+```
+
+Top-K is therefore a mechanism for controlling how much retrieved information is passed into the next stage.
+
+## Why Top-K = 1 Can Be Problematic
+
+The complete answer to a question may be distributed across multiple chunks.
+
+For example:
+
+```text
+Chunk A → Definition
+Chunk B → Explanation
+Chunk C → Example
+```
+
+If:
+
+```text
+K = 1
+```
+
+only one of those chunks may be retrieved.
+
+Therefore, a very small K can reduce the amount of noise but also reduce the chance of retrieving all relevant information.
+
+## Similarity Threshold
+
+A similarity threshold provides a minimum similarity requirement.
+
+For example:
+
+```text
+A → 0.95
+B → 0.91
+C → 0.88
+D → 0.70
+E → 0.42
+```
+
+With:
+
+```text
+Threshold = 0.80
+```
+
+the results that remain are:
+
+```text
+A
+B
+C
+```
+
+Unlike Top-K, the threshold does not require the system to return a fixed number of results.
+
+## Top-K vs Threshold
+
+```text
+Top-K
+→ "Return the K highest-ranked results."
+
+Threshold
+→ "Return results only if they meet the minimum similarity."
+```
+
+They can also be combined:
+
+```text
+Similarity Search
+       ↓
+Threshold Filtering
+       ↓
+Top-K Selection
+       ↓
+Final Retrieved Chunks
+```
+
+The appropriate values depend on the embedding model, dataset, chunking strategy, similarity method, and query types.
+
+## Precision
+
+Precision measures how much of the retrieved information is actually relevant.
+
+```text
+Precision =
+Relevant Retrieved
+-----------------
+All Retrieved
+```
+
+High precision means the retriever returns relatively little irrelevant information.
+
+## Recall
+
+Recall measures how much of the relevant information was successfully retrieved.
+
+```text
+Recall =
+Relevant Retrieved
+-----------------
+All Relevant
+```
+
+High recall means the retriever misses less relevant information.
+
+## Precision vs Recall in YTRAG
+
+Suppose the transcript contains:
+
+```text
+10 Relevant Chunks
+```
+
+The retriever returns:
+
+```text
+5 Chunks
+```
+
+and:
+
+```text
+4 are relevant
+1 is irrelevant
+```
+
+Then conceptually:
+
+```text
+Precision = 4 / 5 = 80%
+
+Recall = 4 / 10 = 40%
+```
+
+This demonstrates that a retriever can have relatively good precision while still missing a large amount of relevant information.
+
+## Retrieval Failure
+
+A retrieval failure occurs when the relevant information exists in the source but the retriever does not return the appropriate chunk or chunks.
+
+Example:
+
+```text
+Relevant Chunks:
+A
+B
+C
+
+Retrieved:
+A
+X
+Y
+```
+
+The retriever found some relevant information but missed important information and introduced irrelevant information.
+
+Possible causes include:
+
+- Chunking problems
+- Embedding representation
+- Query representation
+- Similarity method
+- Top-K configuration
+- Similarity threshold
+- Other retrieval parameters
+
+Top-K itself should not automatically be blamed for every retrieval failure.
+
+## Retrieval vs Context Construction vs Generation
+
+These stages should remain clearly separated.
+
+### Retrieval
+
+```text
+Which information should we retrieve?
+```
+
+The retriever searches for potentially relevant chunks.
+
+### Context Construction
+
+```text
+What information should we give to the LLM and how should it be organized?
+```
+
+Context can contain:
 
 ```text
 System Instructions
@@ -871,129 +1258,390 @@ Retrieved Text
 User Question
 ```
 
-to construct the input/context provided to the LLM.
-
-## Basic RAG Flow
-
-The complete basic flow can be represented as:
+### Generation
 
 ```text
-                    FIND
-                     ↓
-Question → Embedding → Vector Search
-                         ↓
-                    Retrieve Chunks
-                         ↓
-                    PREPARE
-                         ↓
-                  Context Construction
-                         ↓
-                    GENERATE
-                         ↓
-                       LLM
-                         ↓
-                      Answer
+What answer should the LLM produce from the provided context?
 ```
 
-A simpler mental model is:
+The complete flow is:
 
 ```text
-Retrieve → Prepare Context → Generate
-```
-
-## RAG Failure Points
-
-A basic RAG system can fail at three major stages.
-
-### 1. Retrieval Failure
-
-The correct information exists in the vector store, but the relevant chunk is not retrieved.
-
-```text
-Correct Chunk Exists
-       ↓
-Similarity Search
-       ↓
-Wrong / Irrelevant Chunks
-```
-
-The problem is not necessarily caused by Top-K itself.
-
-Possible underlying causes include:
-
-- Poor chunking
-- Poor embedding representation
-- Query representation
-- Similarity method or configuration
-- Retrieval parameters
-
-### 2. Context Failure
-
-Relevant information is retrieved, but the context provided to the LLM is poorly constructed, incomplete, or contains too much irrelevant information.
-
-```text
-Correct Information
-        ↓
-Poor Context Construction
-        ↓
-LLM receives incomplete or irrelevant context
-```
-
-### 3. Generation Failure
-
-The LLM receives appropriate context but produces an unsupported or incorrect answer.
-
-```text
-Correct Context
-      ↓
-     LLM
-      ↓
-Unsupported / Incorrect Answer
-```
-
-A prompt can instruct the LLM to stay within the retrieved context, but such instructions are a mitigation rather than a guarantee.
-
-## Important Day 6 Distinctions
-
-```text
-Indexing
-→ Prepare external information for retrieval.
-
-Query
-→ Use a user question to retrieve relevant information.
-
-Vector
-→ Numerical representation used for retrieval.
-
-Retrieved Text
-→ Actual information provided to the LLM.
-
+Question
+   ↓
 Retrieval
-→ Find relevant information.
-
-Augmentation
-→ Add retrieved information to the model input/context.
-
+   ↓
+Retrieved Chunks
+   ↓
 Context Construction
-→ Organize the retrieved information and other inputs for the LLM.
-
-Generation
-→ LLM produces the response.
+   ↓
+LLM
+   ↓
+Generated Answer
 ```
 
-## Day 6 Checkpoint
+## Why Irrelevant Retrieved Chunks Still Matter
 
-The following concepts were reviewed and understood:
+Suppose retrieval returns:
 
-- Query embeddings
-- Vector vs retrieved text
-- Retrieval vs context construction
-- Retrieval failure
-- Context failure
-- Generation failure
-- Indexing vs query pipeline
-- Complete basic RAG architecture
+```text
+Chunk A → Relevant
+Chunk B → Relevant
+Chunk C → Irrelevant
+Chunk D → Irrelevant
+```
+
+Even if the prompt instructs the LLM to use the retrieved context, C and D are still present in the context.
+
+The LLM may correctly ignore them, but this is not guaranteed.
+
+It may:
+
+- Focus on the relevant chunks.
+- Be distracted by irrelevant information.
+- Interpret an irrelevant chunk as relevant.
+- Combine relevant and irrelevant information.
+- Produce an unsupported response.
+
+Therefore:
+
+```text
+Good Retrieval
+      ↓
+Cleaner Context
+      ↓
+Better Input for LLM
+```
+
+Prompt instructions can reduce generation problems, but they cannot completely compensate for poor retrieval.
+
+## Day 7 Mental Model
+
+```text
+User Question
+      ↓
+Query Embedding
+      ↓
+Similarity Search
+      ↓
+Similarity Ranking
+      ↓
+Top-K / Threshold
+      ↓
+Relevant Chunks
+      ↓
+Context Construction
+      ↓
+LLM
+      ↓
+Answer
+```
+
+The compressed mental model is:
+
+```text
+Embedding
+    ↓
+Search
+    ↓
+Rank
+    ↓
+Filter
+    ↓
+Retrieve
+    ↓
+Generate
+```
+
+## Day 7 Key Distinctions
+
+**Query Embedding**
+
+```text
+User Question → Query Vector
+```
+
+**Similarity Score**
+
+```text
+Signal indicating vector-level similarity
+```
+
+**Top-K**
+
+```text
+Select K highest-ranked results
+```
+
+**Similarity Threshold**
+
+```text
+Filter results below a minimum similarity
+```
+
+**Precision**
+
+```text
+How much retrieved information is relevant?
+```
+
+**Recall**
+
+```text
+How much relevant information was retrieved?
+```
+
+**Retrieval**
+
+```text
+Find relevant information
+```
+
+**Context Construction**
+
+```text
+Prepare retrieved information for the LLM
+```
+
+**Generation**
+
+```text
+LLM produces the answer
+```
+
+## Day 7 Checkpoint
+
+The checkpoint covered:
+
+- Why the user query must be embedded.
+- What similarity scores represent.
+- Why similarity is a relevance signal rather than a guarantee of truth.
+- Top-K retrieval.
+- Similarity thresholds.
+- Top-K vs thresholds.
+- Why Top-K = 1 can miss information.
+- Precision vs recall.
+- Retrieval failures.
+- Why irrelevant retrieved context can still affect generation.
+
+The checkpoint confirmed that the core retrieval mental model is understood, with an important refinement:
+
+> Prompt instructions can tell the LLM to rely on retrieved context, but they do not guarantee that irrelevant retrieved chunks will be ignored.
 
 ## Status
 
 **Completed**
+
+---
+
+# Future Learning Plan
+
+## Phase 1 — Fundamentals
+
+Learn the concepts required to understand the components of a RAG system.
+
+```text
+LLM
+ ↓
+Embeddings
+ ↓
+Vector Search
+ ↓
+Retrieval
+ ↓
+RAG
+```
+
+---
+
+## Phase 2 — Basic RAG Prototype
+
+Build a simple RAG pipeline and understand every component before introducing additional abstractions.
+
+Focus areas:
+
+- Document ingestion
+- Chunking
+- Embeddings
+- Vector storage
+- Retrieval
+- Prompt construction
+- Context injection
+- LLM generation
+- Retrieval testing
+
+---
+
+## Phase 3 — LangChain
+
+Learn how LangChain represents and connects the components already understood conceptually.
+
+Focus areas:
+
+- Models
+- Prompt templates
+- Documents
+- Text splitters
+- Embeddings
+- Vector stores
+- Retrievers
+- Runnables
+- Chains
+
+---
+
+## Phase 4 — YouTube Ingestion
+
+Adapt the generic RAG pipeline to YouTube content.
+
+Focus areas:
+
+- YouTube URL handling
+- Transcript extraction
+- Transcript cleaning
+- Timestamps
+- Chunking
+- Metadata
+
+---
+
+## Phase 5 — First Complete YTRAG
+
+Connect the complete pipeline:
+
+```text
+YouTube URL
+     ↓
+Transcript
+     ↓
+Chunks
+     ↓
+Embeddings
+     ↓
+Vector Store
+     ↓
+Retriever
+     ↓
+Context
+     ↓
+LLM
+     ↓
+Answer
+```
+
+---
+
+## Phase 6 — Learning Features
+
+Potential features:
+
+- Summaries
+- Structured notes
+- Conversational Q&A
+- Timestamp references
+- Key concepts
+- ELI5 explanations
+- Quizzes
+- Flashcards
+- Video chapters
+
+Features will be added based on actual learning and product value.
+
+---
+
+## Phase 7 — Production RAG
+
+Focus on making retrieval and the application more robust.
+
+Topics:
+
+- Chunk-size optimization
+- Chunk overlap
+- Metadata filtering
+- Similarity thresholds
+- Top-K tuning
+- Context optimization
+- Error handling
+- Logging
+- Caching
+- Testing
+- Docker
+
+---
+
+## Phase 8 — Advanced RAG
+
+Explore advanced retrieval architectures:
+
+- Hybrid search
+- Reranking
+- Query rewriting
+- Query expansion
+- Multi-query retrieval
+- HyDE
+- Parent-child retrieval
+- Contextual compression
+- Multi-video RAG
+- Agentic RAG
+- Corrective/self-reflective RAG
+
+Advanced techniques will be introduced only after the basic RAG system is understood and working.
+
+---
+
+## Phase 9 — RAG Evaluation
+
+Learn how to measure whether retrieval and generation are actually improving.
+
+Potential areas:
+
+- Retrieval recall
+- Retrieval precision
+- Context relevance
+- Answer relevance
+- Faithfulness / groundedness
+- Golden datasets
+- Failure analysis
+- Chunking experiments
+- Retrieval experiments
+
+---
+
+## Phase 10 — Production & Portfolio
+
+Final goals:
+
+- Clean architecture
+- Automated testing
+- Dockerization
+- Deployment
+- Documentation
+- Architecture diagrams
+- Performance considerations
+- Portfolio presentation
+
+---
+
+# Development Philosophy
+
+YTRAG is primarily a learning project.
+
+The goal is not to use as many AI frameworks or technologies as possible.
+
+The development approach is:
+
+```text
+Understand
+   ↓
+Explain
+   ↓
+Experiment
+   ↓
+Implement
+   ↓
+Evaluate
+   ↓
+Improve
+```
+
+Complexity should be introduced only when there is a clear problem that requires it.
