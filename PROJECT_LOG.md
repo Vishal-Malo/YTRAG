@@ -717,6 +717,391 @@ The checkpoint confirmed that the core architecture is understood.
 
 ---
 
+# Day 7 — Retrieval Engineering
+
+## Topics Learned
+
+- Query embeddings
+- Similarity search
+- Similarity scores
+- Top-K retrieval
+- Top-K trade-offs
+- Similarity thresholds
+- Top-K vs similarity thresholds
+- Precision
+- Recall
+- Retrieval failure
+- Similarity score vs guaranteed relevance
+- Retrieval vs generation
+
+## Key Learnings
+
+Day 7 focused on understanding the retrieval stage in greater depth.
+
+The core retrieval pipeline is:
+
+```text
+User Question
+      ↓
+Query Embedding
+      ↓
+Similarity Search
+      ↓
+Similarity Ranking
+      ↓
+Top-K / Threshold
+      ↓
+Retrieved Chunks
+      ↓
+Context Construction
+      ↓
+LLM
+      ↓
+Answer
+```
+
+## Query Embedding
+
+The user's question must be converted into a vector so that it can be compared against stored transcript chunk vectors.
+
+```text
+User Question
+      ↓
+Embedding Model
+      ↓
+Query Vector
+```
+
+The query and stored embeddings need to exist in a compatible vector space.
+
+## Similarity Score
+
+A similarity score measures vector-level similarity according to the selected similarity or distance method.
+
+It is an important signal for estimating relevance.
+
+However:
+
+```text
+Similarity Score
+      ≠
+Guaranteed Relevance
+      ≠
+Truth
+```
+
+A highly similar chunk can still be incomplete, irrelevant in context, or insufficient to answer the user's question.
+
+## Top-K Retrieval
+
+Top-K selects the K highest-ranked retrieval results.
+
+Example:
+
+```text
+A → 0.95
+B → 0.91
+C → 0.88
+D → 0.70
+E → 0.42
+```
+
+With:
+
+```text
+K = 3
+```
+
+the system retrieves:
+
+```text
+A
+B
+C
+```
+
+## Top-K Trade-off
+
+Small K:
+
+```text
+Less context
+Less noise
+Potentially lower recall
+```
+
+Large K:
+
+```text
+More context
+Potentially higher recall
+More noise
+Higher token usage
+```
+
+Therefore, K needs to be tuned according to the actual retrieval task.
+
+## Similarity Threshold
+
+A similarity threshold defines the minimum similarity required for a result to be included.
+
+For example:
+
+```text
+Threshold = 0.80
+```
+
+would keep:
+
+```text
+A → 0.95
+B → 0.91
+C → 0.88
+```
+
+while excluding:
+
+```text
+D → 0.70
+E → 0.42
+```
+
+Thresholds are dependent on the embedding model, dataset, similarity method, and retrieval setup.
+
+## Top-K vs Threshold
+
+```text
+Top-K
+→ Return the K highest-ranked results.
+
+Threshold
+→ Return only results above the minimum similarity.
+```
+
+They can be combined:
+
+```text
+Similarity Search
+      ↓
+Threshold Filtering
+      ↓
+Top-K Selection
+      ↓
+Final Context
+```
+
+## Precision and Recall
+
+Precision asks:
+
+> How much of the retrieved information is relevant?
+
+Recall asks:
+
+> How much of the relevant information was successfully retrieved?
+
+Conceptually:
+
+```text
+Precision =
+Relevant Retrieved
+-----------------
+All Retrieved
+```
+
+```text
+Recall =
+Relevant Retrieved
+-----------------
+All Relevant
+```
+
+For example, if there are 10 relevant chunks and the system retrieves 5 chunks, of which 4 are relevant:
+
+```text
+Precision = 4 / 5 = 80%
+
+Recall = 4 / 10 = 40%
+```
+
+This shows that a retriever can retrieve mostly relevant information while still missing a large amount of relevant information.
+
+## Retrieval Failure
+
+A retrieval failure occurs when relevant information exists but the appropriate chunk is not retrieved.
+
+Possible causes include:
+
+- Chunking
+- Embeddings
+- Query representation
+- Similarity method
+- Top-K configuration
+- Similarity threshold
+- Other retrieval parameters
+
+Top-K itself should not automatically be considered the cause of every retrieval failure.
+
+## Irrelevant Context and Generation
+
+Suppose retrieval returns:
+
+```text
+Chunk A → Relevant
+Chunk B → Relevant
+Chunk C → Irrelevant
+Chunk D → Irrelevant
+```
+
+Even if the prompt instructs the LLM to use retrieved context, C and D are still present in the context.
+
+The LLM may ignore them, but this is not guaranteed.
+
+It may instead:
+
+- Correctly focus on A and B.
+- Be distracted by C and D.
+- Interpret an irrelevant chunk as relevant.
+- Combine relevant and irrelevant information.
+- Produce an unsupported response.
+
+Therefore, improving retrieval quality directly improves the quality of the context provided to the LLM.
+
+## Important Day 7 Distinctions
+
+```text
+Query Embedding
+→ User Question → Vector
+
+Similarity Score
+→ Vector-level similarity signal
+
+Top-K
+→ Number of highest-ranked results selected
+
+Threshold
+→ Minimum similarity requirement
+
+Precision
+→ Relevance of retrieved information
+
+Recall
+→ Coverage of relevant information
+
+Retrieval
+→ Find information
+
+Context Construction
+→ Prepare information for the LLM
+
+Generation
+→ Produce the final response
+```
+
+## Day 7 Checkpoint Review
+
+### Q1 — Why embed the user question?
+
+Because similarity search operates on vectors, the user question must also be represented as a vector so that it can be compared with stored chunk vectors.
+
+### Q2 — What does a similarity score tell us?
+
+It tells us how similar two vectors are according to the selected similarity or distance method.
+
+It is a relevance signal, but it does not guarantee that the chunk is actually relevant, correct, or sufficient to answer the question.
+
+### Q3 — Top-K and threshold
+
+Given:
+
+```text
+A → 0.95
+B → 0.91
+C → 0.88
+D → 0.70
+E → 0.42
+```
+
+For:
+
+```text
+K = 3
+```
+
+the result is:
+
+```text
+A, B, C
+```
+
+For:
+
+```text
+Threshold = 0.80
+```
+
+the result is also:
+
+```text
+A, B, C
+```
+
+### Q4 — Top-K vs threshold
+
+Top-K specifies how many top-ranked results to return.
+
+A similarity threshold specifies the minimum similarity required for a result to qualify.
+
+### Q5 — Why can Top-K = 1 be problematic?
+
+Because the answer may require information from multiple chunks.
+
+### Q6 — Precision vs recall
+
+Precision measures how much of the retrieved information is relevant.
+
+Recall measures how much of the relevant information was successfully retrieved.
+
+### Q7 — Missing relevant chunks
+
+If the correct information exists but the retriever fails to return it, the primary problem is retrieval.
+
+### Q8 — Why can't we guarantee that the LLM ignores irrelevant chunks?
+
+Because prompt instructions do not guarantee model behavior.
+
+If irrelevant chunks are included in the context, the LLM can potentially use or be influenced by them.
+
+This reinforces the importance of retrieval quality.
+
+## Day 7 Mental Model
+
+```text
+User Question
+      ↓
+Query Embedding
+      ↓
+Similarity Search
+      ↓
+Similarity Ranking
+      ↓
+Top-K / Threshold
+      ↓
+Relevant Chunks
+      ↓
+Context Construction
+      ↓
+LLM
+      ↓
+Answer
+```
+
+## Status
+
+**Completed**
+
+---
+
 # Future Learning Plan
 
 ## Phase 1 — Fundamentals
@@ -748,6 +1133,7 @@ Focus areas:
 - Embeddings
 - Vector storage
 - Retrieval
+- Retrieval testing
 - Prompt construction
 - Context injection
 - LLM generation
@@ -932,10 +1318,10 @@ Complexity should be introduced only when there is a clear problem that requires
 
 # Current Status
 
-**Current Day:** Day 6
+**Current Day:** Day 7
 
 **Current Phase:** AI & RAG Fundamentals → Basic RAG Prototype
 
-**Completed:** Days 1–6
+**Completed:** Days 1–7
 
-**Next:** Day 7 — Retrieval Engineering
+**Next:** Day 8 — Retrieval Testing & Basic RAG Prototype
