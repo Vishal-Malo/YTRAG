@@ -438,6 +438,285 @@ These failure modes provide the motivation for the later production RAG, advance
 
 ---
 
+# Day 6 — Basic RAG Architecture
+
+## Topics Learned
+
+- End-to-end basic RAG flow
+- Indexing pipeline vs query pipeline in greater detail
+- Query embedding
+- Retrieval
+- Top-K retrieval
+- Retrieved vectors vs retrieved text
+- Context construction
+- Prompt construction
+- Generation
+- Retrieval failure
+- Context failure
+- Generation failure
+
+## Key Learnings
+
+Day 6 focused on understanding how the individual RAG components work together rather than treating RAG as a single black box.
+
+The complete basic architecture is:
+
+```text
+                    INDEXING
+                       │
+YouTube Video          │
+      ↓                │
+Transcript             │
+      ↓                │
+    Chunks              │
+      ↓                │
+  Embeddings            │
+      ↓                │
+Vector Database         │
+                       │
+═══════════════════════╪════════════════════
+                       │
+                     QUERY
+                       ↓
+                 User Question
+                       ↓
+                Query Embedding
+                       ↓
+               Similarity Search
+                       ↓
+              Top-K Relevant Chunks
+                       ↓
+                Context Construction
+                       ↓
+                       LLM
+                       ↓
+                     Answer
+```
+
+## Indexing Pipeline
+
+The indexing pipeline prepares external information for retrieval.
+
+```text
+External Document
+      ↓
+    Chunks
+      ↓
+   Embeddings
+      ↓
+Vector + Text + Metadata
+      ↓
+Vector Store
+```
+
+For YTRAG:
+
+```text
+YouTube Video
+      ↓
+Transcript
+      ↓
+Chunks
+      ↓
+Embeddings
+      ↓
+Vector Store
+```
+
+The important idea is that indexing prepares knowledge before the user asks questions.
+
+## Query Pipeline
+
+The query pipeline retrieves relevant information for an individual question.
+
+```text
+User Question
+      ↓
+Query Embedding
+      ↓
+Similarity Search
+      ↓
+Top-K Relevant Chunks
+      ↓
+Context Construction
+      ↓
+LLM
+      ↓
+Answer
+```
+
+The query and stored chunk embeddings need to be represented in the same vector space so that their semantic relationship can be measured.
+
+## Vector vs Retrieved Text
+
+A vector is a numerical representation used for semantic retrieval.
+
+The retrieved text is the actual information from the original document that can be provided to the LLM.
+
+The key distinction is:
+
+```text
+Vector → FIND
+Text   → INFORM
+```
+
+The vector helps determine which information is relevant.
+
+The text provides the actual evidence that the LLM can use when generating the response.
+
+## Retrieval vs Context Construction
+
+**Retrieval** answers:
+
+```text
+Which information should I use?
+```
+
+It finds relevant chunks according to the user query.
+
+**Context Construction** answers:
+
+```text
+How should I present the retrieved information to the LLM?
+```
+
+It can combine:
+
+```text
+System Instructions
++
+Retrieved Text
++
+User Question
+```
+
+to construct the input/context provided to the LLM.
+
+## Basic RAG Mental Model
+
+```text
+Question
+   ↓
+Embedding
+   ↓
+Vector Search
+   ↓
+Retrieve Chunks
+   ↓
+Context Construction
+   ↓
+LLM
+   ↓
+Answer
+```
+
+The compressed version is:
+
+```text
+Retrieve → Prepare Context → Generate
+```
+
+## RAG Failure Analysis
+
+A basic RAG system can fail at three major stages.
+
+### Retrieval Failure
+
+The correct information exists in the vector store, but the relevant chunk is not retrieved.
+
+```text
+Correct Chunk Exists
+       ↓
+Similarity Search
+       ↓
+Wrong / Irrelevant Chunks
+```
+
+The problem is not necessarily caused by Top-K itself.
+
+Possible underlying causes include:
+
+- Poor chunking
+- Poor embedding representation
+- Query representation
+- Similarity method or configuration
+- Retrieval parameters
+
+### Context Failure
+
+Relevant information is retrieved, but the context provided to the LLM is poorly constructed, incomplete, or contains too much irrelevant information.
+
+```text
+Correct Information
+        ↓
+Poor Context Construction
+        ↓
+LLM receives incomplete or irrelevant context
+```
+
+### Generation Failure
+
+The LLM receives appropriate context but produces an unsupported or incorrect answer.
+
+```text
+Correct Context
+      ↓
+     LLM
+      ↓
+Unsupported / Incorrect Answer
+```
+
+A prompt can instruct the LLM to stay within the retrieved context, but such instructions are a mitigation rather than a guarantee.
+
+## Important Day 6 Distinctions
+
+```text
+Indexing
+→ Prepare external information for retrieval.
+
+Query
+→ Use a user question to retrieve relevant information.
+
+Vector
+→ Numerical representation used for retrieval.
+
+Retrieved Text
+→ Actual information provided to the LLM.
+
+Retrieval
+→ Find relevant information.
+
+Augmentation
+→ Add retrieved information to the model input/context.
+
+Context Construction
+→ Organize retrieved information and other inputs for the LLM.
+
+Generation
+→ LLM produces the response.
+```
+
+## Day 6 Checkpoint
+
+The following concepts were reviewed:
+
+- Query embeddings
+- Vector vs retrieved text
+- Retrieval vs context construction
+- Retrieval failure
+- Context failure
+- Generation failure
+- Indexing vs query pipeline
+- Complete basic RAG architecture
+
+The checkpoint confirmed that the core architecture is understood.
+
+## Status
+
+**Completed**
+
+---
+
 # Future Learning Plan
 
 ## Phase 1 — Fundamentals
@@ -653,10 +932,10 @@ Complexity should be introduced only when there is a clear problem that requires
 
 # Current Status
 
-**Current Day:** Day 5
+**Current Day:** Day 6
 
 **Current Phase:** AI & RAG Fundamentals → Basic RAG Prototype
 
-**Completed:** Days 1–5
+**Completed:** Days 1–6
 
-**Next:** Day 6 — Basic RAG Architecture + Retrieval → Context → Generation
+**Next:** Day 7 — Retrieval Engineering
